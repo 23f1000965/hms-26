@@ -1,0 +1,4 @@
+flask
+flask-caching
+flask-jwt-extended
+flask-sqlalchemy

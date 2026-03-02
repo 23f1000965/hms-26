@@ -1,0 +1,75 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+.env
+backend/.env
+
+# Celery
+celerybeat-schedule*
+
+# Database
+*.db
+*.db-journal
+database_backup.db
+instance/
+backend/instance/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+server.log
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Testing
+cookies.txt
+*.pyc
+test_api.py
+
+# Exports
+exports/
+backend/exports/
+
+# Keep directory structure but ignore contents
+!exports/.gitkeep
+
+# Node modules (if any)
+node_modules/
