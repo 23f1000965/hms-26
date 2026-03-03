@@ -1,7 +1,8 @@
-from flask import Flask
+from flask import Flask, send_from_directory
 from flask_caching import Cache
 from flask_jwt_extended import JWTManager
 from .models import db
+import os
 
 jwt = JWTManager()
 cache = Cache()
@@ -15,5 +16,17 @@ def create_app():
     db.init_app(app)
     jwt.init_app(app)
     cache.init_app(app)
+
+    # frontend serving
+    frontend_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'Frontend')
+    
+    @app.route('/')
+    def index():
+        return send_from_directory(frontend_dir, 'index.html')
+
+    @app.route('/<path:path>')
+    def serve_static(path):
+        return send_from_directory(frontend_dir, path)
+
 
     return app
