@@ -20,7 +20,7 @@ axios.interceptors.request.use(
 axios.interceptors.response.use(
   response => response,
   error => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 || error.response?.status === 422) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       showLogin();
@@ -182,26 +182,14 @@ async function handleRegister(e) {
     }
 }
 
-// role ke hisab se dashboard dikhan
+// role ke hisab se dashboard dikhana
 function showDashboard(user) {
     if (user.role === 'ADMIN') {
-        content.innerHTML = `
-            <h2>Welcome Admin, ${user.username}!</h2>
-            <p>Admin dashboard coming soon.</p>
-            <button class="btn btn-danger" onclick="logout()">Logout</button>
-        `;
+        loadAdminDashboard();
     } else if (user.role === 'DOCTOR') {
-        content.innerHTML = `
-            <h2>Welcome Doctor, ${user.username}!</h2>
-            <p>Doctor dashboard coming soon.</p>
-            <button class="btn btn-danger" onclick="logout()">Logout</button>
-        `;
+        loadDoctorDashboard();
     } else if (user.role === 'PATIENT') {
-        content.innerHTML = `
-            <h2>Welcome Patient, ${user.username}!</h2>
-            <p>Patient dashboard coming soon.</p>
-            <button class="btn btn-danger" onclick="logout()">Logout</button>
-        `;
+        loadPatientDashboard();
     }
 }
 
@@ -212,15 +200,10 @@ function logout() {
     showWelcome();
 }
 
-// check krega ki user authenticated hai ya nahi
+// Authentication check karna jab page load ho
 function checkAuth() {
-    const token = localStorage.getItem('token');
-    const user = JSON.parse(localStorage.getItem('user') || 'null');
-    if (token && user) {
-        showDashboard(user);
-    } else {
-        showWelcome();
-    }
+    localStorage.clear();  
+    showWelcome();
 }
 
 // Initialize hoga jab DOM content loaded hota hai

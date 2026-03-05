@@ -1,5 +1,5 @@
 from app.app import create_app
-from app.models import db, User
+from app.models import db, User, Department
 try:
     from werkzeug.security import generate_password_hash
 except ImportError:
@@ -8,6 +8,7 @@ except ImportError:
         import hashlib
         return hashlib.sha256(password.encode()).hexdigest()
 
+#creating database and adding default admin and departments
 def create_database():
     app = create_app()
     with app.app_context():
@@ -29,6 +30,21 @@ def create_database():
             print("Default admin user created")
         else:
             print("Admin  already exists.")
+
+        # Add default departments if not exist
+        if Department.query.count() == 0:
+            departments = [
+                {'name': 'Cardiology', 'description': 'Heart and cardiovascular diseases'},
+                {'name': 'Neurology', 'description': 'Brain and nervous system'},
+                {'name': 'Orthopedics', 'description': 'Bones and joints'},
+                {'name': 'Pediatrics', 'description': 'Child healthcare'},
+                {'name': 'Dermatology', 'description': 'Skin conditions'}
+            ]
+            for dept_data in departments:
+                dept = Department(**dept_data)
+                db.session.add(dept)
+            db.session.commit()
+            print("Default departments created")
 
         print("created successfully.")
 

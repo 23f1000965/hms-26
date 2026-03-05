@@ -27,7 +27,6 @@ class DoctorProfile(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     department_id = db.Column(db.Integer, db.ForeignKey('department.id'), nullable=False)
-    specialization = db.Column(db.String(100))
     license_number = db.Column(db.String(50), unique=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -44,8 +43,9 @@ class DoctorProfile(db.Model):
             'username': self.user.username,
             'email': self.user.email,
             'department': self.department.name,
-            'specialization': self.specialization,
-            'license_number': self.license_number
+            'department_id': self.department_id,
+            'license_number': self.license_number,
+            'is_active': self.user.is_active
         }
 
 class PatientProfile(db.Model):
@@ -74,7 +74,8 @@ class PatientProfile(db.Model):
             'date_of_birth': self.date_of_birth.isoformat() if self.date_of_birth else None,
             'phone': self.phone,
             'address': self.address,
-            'emergency_contact': self.emergency_contact
+            'emergency_contact': self.emergency_contact,
+            'is_active': self.user.is_active
         }
 
 class Department(db.Model):

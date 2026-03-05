@@ -95,7 +95,6 @@ def get_profile():
         doctor = DoctorProfile.query.filter_by(user_id=user.id).first()
         if doctor:
             profile_data['department'] = doctor.department.name
-            profile_data['specialization'] = doctor.specialization
     elif user.role == 'PATIENT':
         patient = PatientProfile.query.filter_by(user_id=user.id).first()
         if patient:

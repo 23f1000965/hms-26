@@ -3,6 +3,7 @@ from flask_caching import Cache
 from flask_jwt_extended import JWTManager
 from .models import db
 import os
+from flask_cors import CORS
 
 jwt = JWTManager()
 cache = Cache()
@@ -16,6 +17,12 @@ def create_app():
     db.init_app(app)
     jwt.init_app(app)
     cache.init_app(app)
+    CORS(app)  # Enable CORS for all routes
+
+    from .routes.auth import auth_bp
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    from .routes.admin import admin_bp
+    app.register_blueprint(admin_bp, url_prefix='/api/admin')
 
     # frontend serving
     frontend_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'Frontend')
