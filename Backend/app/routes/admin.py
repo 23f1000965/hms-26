@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models import db, User, DoctorProfile, PatientProfile, Appointment, Department
 from werkzeug.security import generate_password_hash
 from sqlalchemy import func
@@ -7,19 +7,15 @@ from sqlalchemy import func
 admin_bp = Blueprint('admin', __name__)
 
 # admin can access all routes in this blueprint
-@admin_bp.before_request
-def require_admin():
-    if request.method == 'OPTIONS':
-        return
-    verify_jwt_in_request()
-    user_id = get_jwt_identity()
+@admin_bp.route('/dashboard', methods=['GET'])
+@jwt_required()
+def get_dashboard_stats():
+    # JWT identity is stored as string, convert to int for DB lookup
+    user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
     if not user or user.role != 'ADMIN':
         return jsonify({'message': 'Admin access required'}), 403
 
-# Dashboard stats
-@admin_bp.route('/dashboard', methods=['GET'])
-def get_dashboard_stats():
     total_doctors = DoctorProfile.query.count()
     total_patients = PatientProfile.query.count()
     total_appointments = Appointment.query.count()
@@ -32,7 +28,13 @@ def get_dashboard_stats():
 
 # Doctor fetches and management
 @admin_bp.route('/doctors', methods=['GET'])
+@jwt_required()
 def get_doctors():
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if not user or user.role != 'ADMIN':
+        return jsonify({'message': 'Admin access required'}), 403
+    
     doctors = DoctorProfile.query.all()
     result = []
     for doctor in doctors:
@@ -41,7 +43,12 @@ def get_doctors():
 
 # Add new doctor
 @admin_bp.route('/doctors', methods=['POST'])
+@jwt_required()
 def add_doctor():
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if not user or user.role != 'ADMIN':
+        return jsonify({'message': 'Admin access required'}), 403
     data = request.get_json()
     username = data.get('username')
     email = data.get('email')
@@ -105,7 +112,13 @@ def update_doctor(doctor_id):
 
 # (deactivate) doctor
 @admin_bp.route('/doctors/<int:doctor_id>', methods=['DELETE'])
+@jwt_required()
 def toggle_doctor_status(doctor_id):
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if not user or user.role != 'ADMIN':
+        return jsonify({'message': 'Admin access required'}), 403
+
     doctor = DoctorProfile.query.get(doctor_id)
     if not doctor:
         return jsonify({'message': 'Doctor not found'}), 404
@@ -118,7 +131,13 @@ def toggle_doctor_status(doctor_id):
 
 # Patient management
 @admin_bp.route('/patients', methods=['GET'])
+@jwt_required()
 def get_patients():
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if not user or user.role != 'ADMIN':
+        return jsonify({'message': 'Admin access required'}), 403
+
     patients = PatientProfile.query.all()
     result = []
     for patient in patients:
@@ -127,7 +146,13 @@ def get_patients():
 
 # (deactivate) patient
 @admin_bp.route('/patients/<int:patient_id>', methods=['DELETE'])
+@jwt_required()
 def toggle_patient_status(patient_id):
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if not user or user.role != 'ADMIN':
+        return jsonify({'message': 'Admin access required'}), 403
+
     patient = PatientProfile.query.get(patient_id)
     if not patient:
         return jsonify({'message': 'Patient not found'}), 404
@@ -140,7 +165,13 @@ def toggle_patient_status(patient_id):
 
 # Appointment management
 @admin_bp.route('/appointments', methods=['GET'])
+@jwt_required()
 def get_appointments():
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if not user or user.role != 'ADMIN':
+        return jsonify({'message': 'Admin access required'}), 403
+
     appointments = Appointment.query.all()
     result = []
     for appt in appointments:
@@ -149,7 +180,13 @@ def get_appointments():
 
 # Update appointment status/notes
 @admin_bp.route('/appointments/<int:appt_id>', methods=['PUT'])
+@jwt_required()
 def update_appointment(appt_id):
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if not user or user.role != 'ADMIN':
+        return jsonify({'message': 'Admin access required'}), 403
+
     appt = Appointment.query.get(appt_id)
     if not appt:
         return jsonify({'message': 'Appointment not found'}), 404
@@ -162,7 +199,13 @@ def update_appointment(appt_id):
 
 # Department management
 @admin_bp.route('/departments', methods=['GET'])
+@jwt_required()
 def get_departments():
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if not user or user.role != 'ADMIN':
+        return jsonify({'message': 'Admin access required'}), 403
+
     departments = Department.query.all()
     result = [{'id': d.id, 'name': d.name, 'description': d.description} for d in departments]
     return jsonify(result), 200

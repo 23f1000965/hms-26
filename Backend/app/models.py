@@ -165,7 +165,7 @@ class DoctorAvailability(db.Model):
 
     # Unique constraint per doctor per date
     __table_args__ = (
-        db.UniqueConstraint('doctor_id', 'date', name='unique_doctor_date'),
+        db.UniqueConstraint('doctor_id', 'date', 'start_time', 'end_time', name='unique_doctor_date_time_range'),
     )
 
     # Relationships

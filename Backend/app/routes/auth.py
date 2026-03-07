@@ -64,7 +64,7 @@ def login():
     if not user.is_active:
         return jsonify({'message': 'Account is deactivated'}), 401
    # JWT token generate ho rha hai login ke time 
-    access_token = create_access_token(identity=user.id, expires_delta=timedelta(hours=1))
+    access_token = create_access_token(identity=str(user.id), expires_delta=timedelta(hours=1))
     return jsonify({
         'access_token': access_token,
         'user': {
@@ -79,7 +79,7 @@ def login():
 @auth_bp.route('/profile', methods=['GET'])
 @jwt_required()
 def get_profile():
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
     if not user:
         return jsonify({'message': 'User not found'}), 404

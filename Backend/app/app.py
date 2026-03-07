@@ -12,7 +12,12 @@ def create_app():
     app = Flask(__name__)
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///hospital.db'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['JWT_SECRET_KEY'] = 'hms-2026' 
+    app.config['SECRET_KEY'] = 'hospital-management-system-secret-key-2026' 
+
+    app.config['JWT_SECRET_KEY'] = 'super-secret-key-for-hms-jwt-authentication-2026'
+    app.config['JWT_TOKEN_LOCATION'] = ['headers']  
+    app.config['JWT_HEADER_NAME'] = 'Authorization'
+    app.config['JWT_HEADER_TYPE'] = 'Bearer'
 
     db.init_app(app)
     jwt.init_app(app)
@@ -23,7 +28,9 @@ def create_app():
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     from .routes.admin import admin_bp
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
-
+    from .routes.doctor import doctor_bp
+    app.register_blueprint(doctor_bp, url_prefix='/api/doctor')
+    
     # frontend serving
     frontend_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'Frontend')
     

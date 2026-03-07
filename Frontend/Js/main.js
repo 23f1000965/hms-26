@@ -202,8 +202,13 @@ function logout() {
 
 // Authentication check karna jab page load ho
 function checkAuth() {
-    localStorage.clear();  
-    showWelcome();
+    const token = localStorage.getItem('token');
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+    if (token && user) {
+        showDashboard(user);
+    } else {
+        showWelcome();
+    }
 }
 
 // Initialize hoga jab DOM content loaded hota hai
