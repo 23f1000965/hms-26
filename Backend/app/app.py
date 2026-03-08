@@ -30,7 +30,9 @@ def create_app():
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
     from .routes.doctor import doctor_bp
     app.register_blueprint(doctor_bp, url_prefix='/api/doctor')
-    
+    from .routes.patient import patient_bp
+    app.register_blueprint(patient_bp, url_prefix='/api/patient')
+
     # frontend serving
     frontend_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'Frontend')
     
