@@ -1,6 +1,8 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timedelta, time
+import json
+from sqlalchemy.exc import IntegrityError
 from ..models import (
 	db,
 	User,
@@ -11,6 +13,7 @@ from ..models import (
 	Department,
 	Treatment,
 )
+
 
 patient_bp = Blueprint('patient', __name__)
 
@@ -197,7 +200,7 @@ def get_doctor_public_availability(doctor_id):
 	if not doctor or not doctor.user.is_active:
 		return jsonify({'message': 'Doctor not found'}), 404
 
-	start_date = datetime.utcnow().date() + timedelta(days=1)
+	start_date = datetime.utcnow().date() 
 	days = [start_date + timedelta(days=offset) for offset in range(7)]
 
 	availability_rows = DoctorAvailability.query.filter(
@@ -283,7 +286,6 @@ def book_appointment():
 	date_text = data.get('date')
 	start_time_text = data.get('start_time')
 	end_time_text = data.get('end_time')
-	notes = data.get('notes')
 
 	if not doctor_id or not date_text or not start_time_text or not end_time_text:
 		return jsonify({'message': 'doctor_id, date, start_time and end_time are required'}), 400
@@ -325,22 +327,41 @@ def book_appointment():
 	existing_appt = Appointment.query.filter_by(
 		doctor_id=doctor.id,
 		date=selected_date,
-		time=start_time,
-		status='BOOKED'
+		time=start_time
 	).first()
 	if existing_appt:
-		return jsonify({'message': 'This slot is already booked'}), 400
+		if existing_appt.status == 'BOOKED':
+			return jsonify({'message': 'This slot is already booked'}), 400
+
+		if existing_appt.status == 'CANCELLED':
+			now_utc = datetime.utcnow()
+			slot_datetime = datetime.combine(selected_date, start_time)
+
+			if slot_datetime > now_utc:
+				existing_appt.patient_id = patient.id
+				existing_appt.status = 'BOOKED'
+				try:
+					db.session.commit()
+				except IntegrityError:
+					db.session.rollback()
+					return jsonify({'message': 'This slot is already booked'}), 400
+				return jsonify({'message': 'Appointment booked successfully'}), 201
+
+			return jsonify({'message': 'Book failed try another slot'}), 400
 
 	appointment = Appointment(
 		doctor_id=doctor.id,
 		patient_id=patient.id,
 		date=selected_date,
 		time=start_time,
-		status='BOOKED',
-		notes=notes
+		status='BOOKED'
 	)
 	db.session.add(appointment)
-	db.session.commit()
+	try:
+		db.session.commit()
+	except IntegrityError:
+		db.session.rollback()
+		return jsonify({'message': 'This slot is already booked'}), 400
 
 	return jsonify({'message': 'Appointment booked successfully'}), 201
 
@@ -364,8 +385,7 @@ def get_my_appointments():
 			'department': appt.doctor.department.name,
 			'date': appt.date.isoformat(),
 			'time': appt.time.isoformat(),
-			'status': appt.status,
-			'notes': appt.notes
+			'status': appt.status
 		})
 	return jsonify(result), 200
 
@@ -401,6 +421,29 @@ def get_patient_history():
 			continue
 
 		for treatment in treatments:
+			if treatment.medicines:
+				try:
+					parsed_medicines = json.loads(treatment.medicines)
+					if isinstance(parsed_medicines, list):
+						formatted = []
+						for med in parsed_medicines:
+							if isinstance(med, dict):
+								name = str(med.get('name', '')).strip()
+								if not name:
+									continue
+								dosage = f"{med.get('morning', '-') or '-'}-{med.get('afternoon', '-') or '-'}-{med.get('night', '-') or '-'}"
+								formatted.append(f"{name} ({dosage})")
+							else:
+								text = str(med).strip()
+								if text:
+									formatted.append(text)
+						medicines_text = ', '.join(formatted) if formatted else '-'
+					else:
+						medicines_text = treatment.medicines
+				except Exception:
+					medicines_text = treatment.medicines
+			else:
+				medicines_text = '-'
 			history_rows.append({
 				'appointment_id': appt.id,
 				'doctor_name': appt.doctor.user.username,
@@ -408,11 +451,11 @@ def get_patient_history():
 				'date': appt.date.isoformat(),
 				'time': appt.time.isoformat(),
 				'status': appt.status,
-				'visit_type': 'In-person',
-				'tests_done': treatment.notes or '-',
-				'diagnosis': treatment.description or '-',
-				'prescription': treatment.medication or '-',
-				'medicines': treatment.medication or '-',
+				'visit_type': treatment.visit_type or 'In-person',
+				'tests_done': treatment.tests_done or '-',
+				'diagnosis': treatment.diagnosis or '-',
+				'prescription': treatment.prescription or '-',
+				'medicines': medicines_text,
 			})
 
 	return jsonify(history_rows), 200

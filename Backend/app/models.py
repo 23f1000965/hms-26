@@ -123,7 +123,6 @@ class Appointment(db.Model):
             'date': self.date.isoformat(),
             'time': self.time.isoformat(),
             'status': self.status,
-            'notes': self.notes,
             'created_at': self.created_at.isoformat()
         }
 
@@ -132,10 +131,11 @@ class Treatment(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     appointment_id = db.Column(db.Integer, db.ForeignKey('appointment.id'), nullable=False)
-    description = db.Column(db.Text, nullable=False)
-    medication = db.Column(db.Text)
-    cost = db.Column(db.Float)
-    notes = db.Column(db.Text)
+    visit_type = db.Column(db.String(50), default='In-person', nullable=False)
+    tests_done = db.Column(db.Text)
+    diagnosis = db.Column(db.Text, nullable=False)
+    prescription = db.Column(db.Text)
+    medicines = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def __repr__(self):

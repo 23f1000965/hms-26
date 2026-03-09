@@ -1,8 +1,9 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from ..models import db, User, DoctorProfile, PatientProfile, Appointment, Department
+from ..models import db, User, DoctorProfile, PatientProfile, Appointment, Department, Treatment
 from werkzeug.security import generate_password_hash
 from sqlalchemy import func
+import json
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -178,7 +179,7 @@ def get_appointments():
         result.append(appt.to_dict())
     return jsonify(result), 200
 
-# Update appointment status/notes
+# Update appointment status
 @admin_bp.route('/appointments/<int:appt_id>', methods=['PUT'])
 @jwt_required()
 def update_appointment(appt_id):
@@ -191,11 +192,75 @@ def update_appointment(appt_id):
     if not appt:
         return jsonify({'message': 'Appointment not found'}), 404
 
-    data = request.get_json()
+    data = request.get_json() or {}
     appt.status = data.get('status', appt.status)
-    appt.notes = data.get('notes', appt.notes)
     db.session.commit()
     return jsonify({'message': 'Appointment updated successfully', 'appointment': appt.to_dict()}), 200
+
+# Get appointment details with treatment information 
+@admin_bp.route('/appointments/<int:appt_id>/detail', methods=['GET'])
+@jwt_required()
+def get_appointment_detail(appt_id):
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if not user or user.role != 'ADMIN':
+        return jsonify({'message': 'Admin access required'}), 403
+
+    appt = Appointment.query.get(appt_id)
+    if not appt:
+        return jsonify({'message': 'Appointment not found'}), 404
+
+    treatment = Treatment.query.filter_by(appointment_id=appt.id).first()
+
+    medicines = []
+    if treatment and treatment.medicines:
+        try:
+            parsed = json.loads(treatment.medicines)
+            if isinstance(parsed, list):
+                for entry in parsed:
+                    if isinstance(entry, dict):
+                        name = str(entry.get('name', '')).strip()
+                        if name:
+                            medicines.append({
+                                'name': name,
+                                'morning': str(entry.get('morning', '')).strip(),
+                                'afternoon': str(entry.get('afternoon', '')).strip(),
+                                'night': str(entry.get('night', '')).strip(),
+                            })
+                    else:
+                        text = str(entry).strip()
+                        if text:
+                            medicines.append({
+                                'name': text,
+                                'morning': '',
+                                'afternoon': '',
+                                'night': '',
+                            })
+        except Exception:
+            medicines = [
+                {
+                    'name': item.strip(),
+                    'morning': '',
+                    'afternoon': '',
+                    'night': '',
+                }
+                for item in treatment.medicines.split(',') if item.strip()
+            ]
+
+    return jsonify({
+        'appointment_id': appt.id,
+        'patient_name': appt.patient.user.username,
+        'doctor_name': appt.doctor.user.username,
+        'department': appt.doctor.department.name,
+        'date': appt.date.isoformat(),
+        'time': appt.time.isoformat(),
+        'status': appt.status,
+        'visit_type': treatment.visit_type if treatment else 'In-person',
+        'tests_done': treatment.tests_done if treatment else '',
+        'diagnosis': treatment.diagnosis if treatment else '',
+        'prescription': treatment.prescription if treatment else '',
+        'medicines': medicines,
+    }), 200
 
 # Department management
 @admin_bp.route('/departments', methods=['GET'])

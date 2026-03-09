@@ -74,7 +74,7 @@ def create_database():
         # Add default doctor user and profile 
         if User.query.filter_by(role='DOCTOR').count() == 0:
             doctor_user = User(
-                username='dr_rahul',
+                username='Dr rahul',
                 email='rahul@hospital.com',
                 password_hash=generate_password_hash('123'),
                 role='DOCTOR'

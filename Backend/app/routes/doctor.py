@@ -1,8 +1,8 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from ..models import db, User, DoctorProfile, PatientProfile, Appointment, Department, DoctorAvailability
+from ..models import db, User, DoctorProfile, PatientProfile, Appointment, Department, DoctorAvailability, Treatment
 from datetime import datetime, timedelta, time
-
+import json
 doctor_bp = Blueprint('doctor', __name__)
 
 def _get_authorized_doctor():
@@ -46,8 +46,7 @@ def get_doctor_dashboard():
             'patient_name': appt.patient.user.username,
             'date': appt.date.isoformat(),
             'time': appt.time.isoformat(),
-            'status': appt.status,
-            'notes': appt.notes
+            'status': appt.status
         })
 
     return jsonify({
@@ -74,11 +73,11 @@ def get_assigned_patients():
     ).distinct().all()
     patient_ids = [p[0] for p in patient_ids]
 
-    patients = PatientProfile.query.filter(PatientProfile.user_id.in_(patient_ids)).all()
+    patients = PatientProfile.query.filter(PatientProfile.id.in_(patient_ids)).all()
     result = [p.to_dict() for p in patients]
     return jsonify(result), 200
 
-# Update appointment status or notes
+# Update appointment status
 @doctor_bp.route('/appointments/<int:appt_id>', methods=['PUT'])
 @jwt_required()
 def update_appointment(appt_id):
@@ -92,11 +91,120 @@ def update_appointment(appt_id):
     if not appt or appt.doctor_id != doctor.id:
         return jsonify({'message': 'Appointment not found or not assigned'}), 404
 
-    data = request.get_json()
+    data = request.get_json() or {}
     appt.status = data.get('status', appt.status)
-    appt.notes = data.get('notes', appt.notes)
+
+    treatment_data = data.get('treatment') or {}
+    if appt.status == 'COMPLETED':
+        visit_type = treatment_data.get('visit_type', '').strip() or 'In-person'
+        tests_done = treatment_data.get('tests_done', '').strip()
+        diagnosis = treatment_data.get('diagnosis', '').strip()
+        prescription = treatment_data.get('prescription', '').strip()
+        medicines = treatment_data.get('medicines', [])
+
+        normalized_medicines = []
+        if isinstance(medicines, list):
+            for item in medicines:
+                if isinstance(item, dict):
+                    name = str(item.get('name', '')).strip()
+                    morning = str(item.get('morning', '')).strip()
+                    afternoon = str(item.get('afternoon', '')).strip()
+                    night = str(item.get('night', '')).strip()
+                    if name:
+                        normalized_medicines.append({
+                            'name': name,
+                            'morning': morning,
+                            'afternoon': afternoon,
+                            'night': night,
+                        })
+                else:
+                    name = str(item).strip()
+                    if name:
+                        normalized_medicines.append({
+                            'name': name,
+                            'morning': '',
+                            'afternoon': '',
+                            'night': '',
+                        })
+
+        treatment = Treatment.query.filter_by(appointment_id=appt.id).first()
+        if not treatment:
+            treatment = Treatment(appointment_id=appt.id, diagnosis=diagnosis or 'General Consultation')
+            db.session.add(treatment)
+
+        treatment.visit_type = visit_type
+        treatment.tests_done = tests_done or None
+        treatment.diagnosis = diagnosis or 'General Consultation'
+        treatment.prescription = prescription or None
+        treatment.medicines = json.dumps(normalized_medicines) if normalized_medicines else None
     db.session.commit()
     return jsonify({'message': 'Appointment updated'}), 200
+
+@doctor_bp.route('/appointments/<int:appt_id>/treatment', methods=['GET'])
+@jwt_required()
+def get_appointment_treatment(appt_id):
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if not user or user.role != 'DOCTOR' or not user.is_active:
+        return jsonify({'message': 'Doctor access required'}), 403
+
+    doctor = DoctorProfile.query.filter_by(user_id=user_id).first()
+    appt = Appointment.query.get(appt_id)
+    if not appt or appt.doctor_id != doctor.id:
+        return jsonify({'message': 'Appointment not found or not assigned'}), 404
+
+    treatment = Treatment.query.filter_by(appointment_id=appt.id).first()
+    if not treatment:
+        return jsonify({'message': 'No treatment record found'}), 404
+
+    medicines = []
+    if treatment.medicines:
+        try:
+            parsed = json.loads(treatment.medicines)
+            if isinstance(parsed, list):
+                for entry in parsed:
+                    if isinstance(entry, dict):
+                        name = str(entry.get('name', '')).strip()
+                        if name:
+                            medicines.append({
+                                'name': name,
+                                'morning': str(entry.get('morning', '')).strip(),
+                                'afternoon': str(entry.get('afternoon', '')).strip(),
+                                'night': str(entry.get('night', '')).strip(),
+                            })
+                    else:
+                        text = str(entry).strip()
+                        if text:
+                            medicines.append({
+                                'name': text,
+                                'morning': '',
+                                'afternoon': '',
+                                'night': '',
+                            })
+        except Exception:
+            medicines = [
+                {
+                    'name': item.strip(),
+                    'morning': '',
+                    'afternoon': '',
+                    'night': '',
+                }
+                for item in treatment.medicines.split(',') if item.strip()
+            ]
+
+    return jsonify({
+        'appointment_id': appt.id,
+        'patient_name': appt.patient.user.username,
+        'department': appt.doctor.department.name,
+        'visit_type': treatment.visit_type or 'In-person',
+        'tests_done': treatment.tests_done or '',
+        'diagnosis': treatment.diagnosis or '',
+        'prescription': treatment.prescription or '',
+        'medicines': medicines,
+        'status': appt.status,
+        'date': appt.date.isoformat(),
+        'time': appt.time.isoformat(),
+    }), 200
 
 # Get doctor profile
 @doctor_bp.route('/profile', methods=['GET'])
@@ -172,7 +280,7 @@ def get_doctor_availability():
     if error:
         return error
 
-    start_date = datetime.utcnow().date() + timedelta(days=1)
+    start_date = datetime.utcnow().date() 
     days = [start_date + timedelta(days=offset) for offset in range(7)]
 
     saved_slots = DoctorAvailability.query.filter(
