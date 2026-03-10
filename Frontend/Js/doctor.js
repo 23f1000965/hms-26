@@ -3,6 +3,7 @@
 let doctorAvailabilityState = [];
 let doctorDashboardAppointments = [];
 let doctorAssignedPatients = [];
+let doctorPatientHistoryRows = [];
 
 async function refreshDoctorDashboardData() {
     const [dashboardResponse, patientsResponse] = await Promise.all([
@@ -161,6 +162,7 @@ async function viewUpcomingAppointments() {
                 <td>
                     <button class="btn btn-sm btn-success" onclick="openCompleteModal(${appt.id}, '${appt.patient_name.replace(/'/g, "\\'")}')">Complete</button>
                     <button class="btn btn-sm btn-warning" onclick="cancelAppointmentByDoctor(${appt.id})">Cancel</button>
+                    <button class="btn btn-sm btn-dark" onclick="openDoctorPatientHistory(${appt.id})">History</button>
                 </td>
             </tr>`;
         });
@@ -177,7 +179,7 @@ async function viewUpcomingAppointments() {
 }
 
 // Update appointment status
-async function updateAppointmentStatus(id, status, treatment = null) {
+async function updateAppointmentStatus(id, status, treatment = null, onSuccess = viewUpcomingAppointments) {
     const data = {};
     if (status) data.status = status;
     if (treatment) data.treatment = treatment;
@@ -186,7 +188,9 @@ async function updateAppointmentStatus(id, status, treatment = null) {
         await axios.put(`/api/doctor/appointments/${id}`, data);
         alert('Appointment updated');
         await refreshDoctorDashboardData();
-        viewUpcomingAppointments();
+        if (typeof onSuccess === 'function') {
+            onSuccess();
+        }
     } catch (error) {
         alert(error.response?.data?.message || 'Failed to update appointment');
     }
@@ -382,6 +386,7 @@ async function openTreatmentViewModal(apptId) {
                             </div>
                         </div>
                         <div class="modal-footer">
+                            <button type="button" class="btn btn-primary" id="editTreatmentBtn">Edit</button>
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                         </div>
                     </div>
@@ -392,10 +397,371 @@ async function openTreatmentViewModal(apptId) {
         document.body.appendChild(modalContainer.firstElementChild);
         const modalElement = document.getElementById('viewTreatmentModal');
         const modal = new bootstrap.Modal(modalElement);
+
+        document.getElementById('editTreatmentBtn').addEventListener('click', () => {
+            modal.hide();
+            modalElement.remove();
+            openEditTreatmentModal(apptId, data);
+        });
+
         modal.show();
     } catch (error) {
         alert(error.response?.data?.message || 'Failed to load treatment details');
     }
+}
+
+function addDoctorEditMedicineField(medicine = null) {
+    const container = document.getElementById('doctorEditMedicinesContainer');
+    if (!container) {
+        return;
+    }
+
+    const values = {
+        name: medicine?.name || '',
+        morning: String(medicine?.morning ?? '0'),
+        afternoon: String(medicine?.afternoon ?? '0'),
+        night: String(medicine?.night ?? '0')
+    };
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'row g-2 mb-2 medicine-row';
+    wrapper.innerHTML = `
+        <div class="col-md-4">
+            <input type="text" class="form-control medicine-name" placeholder="Medicine name" value="${values.name}">
+        </div>
+        <div class="col-md-2">
+            <select class="form-select medicine-morning">
+                <option value="0" ${values.morning === '0' ? 'selected' : ''}>0</option>
+                <option value="1" ${values.morning === '1' ? 'selected' : ''}>1</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select medicine-afternoon">
+                <option value="0" ${values.afternoon === '0' ? 'selected' : ''}>0</option>
+                <option value="1" ${values.afternoon === '1' ? 'selected' : ''}>1</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select medicine-night">
+                <option value="0" ${values.night === '0' ? 'selected' : ''}>0</option>
+                <option value="1" ${values.night === '1' ? 'selected' : ''}>1</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button type="button" class="btn btn-outline-danger w-100" onclick="this.closest('.medicine-row').remove()">Remove</button>
+        </div>
+    `;
+    container.appendChild(wrapper);
+}
+
+function openEditTreatmentModal(apptId, data) {
+    const existingModal = document.getElementById('editTreatmentModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    const modalContainer = document.createElement('div');
+    modalContainer.innerHTML = `
+        <div class="modal fade" id="editTreatmentModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Edit Treatment Details</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-1"><strong>Patient Name:</strong> ${data.patient_name || '-'}</p>
+                        <form id="editTreatmentForm">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Visit Type</label>
+                                    <input type="text" class="form-control" id="editVisitType" value="${data.visit_type || 'In-person'}" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Test Done</label>
+                                    <input type="text" class="form-control" id="editTestsDone" value="${data.tests_done || ''}" placeholder="e.g. ECG">
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Diagnosis</label>
+                                <input type="text" class="form-control" id="editDiagnosis" value="${data.diagnosis || ''}" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Prescription</label>
+                                <input type="text" class="form-control" id="editPrescription" value="${data.prescription || ''}" placeholder="Prescription details">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Medicines</label>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-md-4"><small class="text-muted">Name</small></div>
+                                    <div class="col-md-2"><small class="text-muted">Morning</small></div>
+                                    <div class="col-md-2"><small class="text-muted">Afternoon</small></div>
+                                    <div class="col-md-2"><small class="text-muted">Night</small></div>
+                                    <div class="col-md-2"></div>
+                                </div>
+                                <div id="doctorEditMedicinesContainer"></div>
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="addEditMedicineBtn">Add Medicine</button>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-success" id="saveEditTreatmentBtn">Save</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modalContainer.firstElementChild);
+
+    (data.medicines || []).forEach(item => addDoctorEditMedicineField(item));
+    if (!(data.medicines || []).length) {
+        addDoctorEditMedicineField();
+    }
+
+    document.getElementById('addEditMedicineBtn').addEventListener('click', () => addDoctorEditMedicineField());
+
+    const modalElement = document.getElementById('editTreatmentModal');
+    const modal = new bootstrap.Modal(modalElement);
+
+    document.getElementById('saveEditTreatmentBtn').addEventListener('click', async () => {
+        const medicines = Array.from(document.querySelectorAll('#doctorEditMedicinesContainer .medicine-row'))
+            .map(row => ({
+                name: row.querySelector('.medicine-name')?.value.trim() || '',
+                morning: row.querySelector('.medicine-morning')?.value.trim() || '',
+                afternoon: row.querySelector('.medicine-afternoon')?.value.trim() || '',
+                night: row.querySelector('.medicine-night')?.value.trim() || ''
+            }))
+            .filter(item => item.name.length > 0);
+
+        const treatment = {
+            visit_type: document.getElementById('editVisitType').value.trim(),
+            tests_done: document.getElementById('editTestsDone').value.trim(),
+            diagnosis: document.getElementById('editDiagnosis').value.trim(),
+            prescription: document.getElementById('editPrescription').value.trim(),
+            medicines
+        };
+
+        if (!treatment.visit_type || !treatment.diagnosis) {
+            alert('Visit Type and Diagnosis are required');
+            return;
+        }
+
+        await updateAppointmentStatus(apptId, 'COMPLETED', treatment, viewAssignedPatients);
+        modal.hide();
+        modalElement.remove();
+    });
+
+    modal.show();
+}
+
+async function openDoctorPatientHistory(apptId) {
+    try {
+        const response = await axios.get(`/api/doctor/appointments/${apptId}/patient-history`);
+
+        doctorPatientHistoryRows = (response.data || [])
+            .filter(row => row.status !== 'BOOKED')
+            .map(row => ({ ...row }));
+
+        const rows = doctorPatientHistoryRows.map((row, index) => `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${row.doctor_name}</td>
+                <td>${row.department}</td>
+                <td>${formatDoctorHistoryDate(row.date)}</td>
+                <td>${formatDoctorHistoryTime(row.time)}</td>
+                <td>${row.status}</td>
+                <td><button class="btn btn-sm btn-info" onclick="openDoctorHistoryViewModal(${row.appointment_id})">View</button></td>
+            </tr>
+        `).join('');
+
+        const patientName = doctorPatientHistoryRows[0]?.patient_name || 'Patient';
+
+        document.getElementById('doctorContent').innerHTML = `
+            <h3>${patientName} History</h3>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Sr No</th>
+                            <th>Doctor</th>
+                            <th>Department</th>
+                            <th>Date</th>
+                            <th>Time</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows || '<tr><td colspan="7" class="text-muted">No completed or cancelled records</td></tr>'}</tbody>
+                </table>
+            </div>
+            <button class="btn btn-secondary" onclick="viewUpcomingAppointments()">Back</button>
+        `;
+    } catch (error) {
+        alert(error.response?.data?.message || 'Failed to load patient history');
+    }
+}
+
+function openDoctorHistoryViewModal(appointmentId) {
+    const row = (doctorPatientHistoryRows || []).find(item => item.appointment_id === appointmentId);
+    if (!row) {
+        alert('Appointment details not found');
+        return;
+    }
+
+    if (row.status === 'COMPLETED') {
+        openDoctorCompletedHistoryModal(row);
+        return;
+    }
+
+    if (row.status === 'CANCELLED') {
+        openDoctorCancelledHistoryModal(row);
+        return;
+    }
+
+    alert('Only completed/cancelled records can be viewed here');
+}
+
+function openDoctorCompletedHistoryModal(row) {
+    const existingModal = document.getElementById('doctorHistoryViewModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    const medicines = parseDoctorHistoryMedicines(row.medicines);
+    const medicinesRows = medicines.map((item, index) => `
+        <tr>
+            <td>${index + 1}</td>
+            <td>${item.name || '-'}</td>
+            <td>${item.morning || '-'}</td>
+            <td>${item.afternoon || '-'}</td>
+            <td>${item.night || '-'}</td>
+        </tr>
+    `).join('');
+
+    const modalContainer = document.createElement('div');
+    modalContainer.innerHTML = `
+        <div class="modal fade" id="doctorHistoryViewModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Patient History Details</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p><strong>Patient:</strong> ${row.patient_name || '-'}</p>
+                        <p><strong>Department:</strong> ${row.department || '-'}</p>
+                        <p><strong>Visit Type:</strong> ${row.visit_type || 'In-person'}</p>
+                        <p><strong>Test Done:</strong> ${row.tests_done || '-'}</p>
+                        <p><strong>Diagnosis:</strong> ${row.diagnosis || '-'}</p>
+                        <p><strong>Prescription:</strong> ${row.prescription || '-'}</p>
+                        <p class="mb-1"><strong>Medicines:</strong></p>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Medicine</th>
+                                        <th>Morning</th>
+                                        <th>Afternoon</th>
+                                        <th>Night</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${medicinesRows || '<tr><td colspan="5" class="text-muted">No medicines</td></tr>'}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modalContainer.firstElementChild);
+    const modalElement = document.getElementById('doctorHistoryViewModal');
+    const modal = new bootstrap.Modal(modalElement);
+    modal.show();
+}
+
+function openDoctorCancelledHistoryModal(row) {
+    const existingModal = document.getElementById('doctorCancelledViewModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    const modalContainer = document.createElement('div');
+    modalContainer.innerHTML = `
+        <div class="modal fade" id="doctorCancelledViewModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Appointment Details</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p><strong>Patient:</strong> ${row.patient_name || '-'}</p>
+                        <p><strong>Department:</strong> ${row.department || '-'}</p>
+                        <p><strong>Date:</strong> ${formatDoctorHistoryDate(row.date)}</p>
+                        <p><strong>Time:</strong> ${formatDoctorHistoryTime(row.time)}</p>
+                        <p><strong>Status:</strong> ${row.status}</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modalContainer.firstElementChild);
+    const modalElement = document.getElementById('doctorCancelledViewModal');
+    const modal = new bootstrap.Modal(modalElement);
+    modal.show();
+}
+
+function parseDoctorHistoryMedicines(text) {
+    if (!text || text === '-') {
+        return [];
+    }
+
+    const parts = String(text).split(',').map(item => item.trim()).filter(Boolean);
+    return parts.map(item => {
+        const match = item.match(/^(.*)\(([^-]*)-([^-]*)-([^)]*)\)$/);
+        if (match) {
+            return {
+                name: match[1].trim(),
+                morning: match[2].trim() || '-',
+                afternoon: match[3].trim() || '-',
+                night: match[4].trim() || '-'
+            };
+        }
+
+        return {
+            name: item,
+            morning: '-',
+            afternoon: '-',
+            night: '-'
+        };
+    });
+}
+
+function formatDoctorHistoryDate(dateText) {
+    const date = new Date(dateText);
+    if (Number.isNaN(date.getTime())) {
+        return dateText;
+    }
+    return date.toLocaleDateString('en-GB');
+}
+
+function formatDoctorHistoryTime(timeText) {
+    const [hours = '00', minutes = '00'] = String(timeText).split(':');
+    const hourNumber = Number(hours);
+    const suffix = hourNumber >= 12 ? 'PM' : 'AM';
+    const hour12 = hourNumber % 12 === 0 ? 12 : hourNumber % 12;
+    return `${hour12}:${minutes} ${suffix}`;
 }
 
 // View assigned patients
@@ -415,7 +781,8 @@ async function viewAssignedPatients() {
                 <td>${appt.time}</td>
                 <td>${appt.status}</td>
                 <td>
-                    <button class="btn btn-sm btn-info" onclick="openAssignedViewModal(${appt.id})">View</button>
+                    <button class="btn btn-sm btn-info me-1" onclick="openAssignedViewModal(${appt.id})">View</button>
+                    <button class="btn btn-sm btn-dark" onclick="openDoctorPatientHistory(${appt.id})">History</button>
                 </td>
             </tr>`;
         });

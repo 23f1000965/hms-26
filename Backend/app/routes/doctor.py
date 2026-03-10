@@ -140,6 +140,7 @@ def update_appointment(appt_id):
     db.session.commit()
     return jsonify({'message': 'Appointment updated'}), 200
 
+# Get treatment details for an appointment
 @doctor_bp.route('/appointments/<int:appt_id>/treatment', methods=['GET'])
 @jwt_required()
 def get_appointment_treatment(appt_id):
@@ -205,6 +206,86 @@ def get_appointment_treatment(appt_id):
         'date': appt.date.isoformat(),
         'time': appt.time.isoformat(),
     }), 200
+
+# Get patient history for an appointment
+@doctor_bp.route('/appointments/<int:appt_id>/patient-history', methods=['GET'])
+@jwt_required()
+def get_patient_history_for_appointment(appt_id):
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if not user or user.role != 'DOCTOR' or not user.is_active:
+        return jsonify({'message': 'Doctor access required'}), 403
+
+    doctor = DoctorProfile.query.filter_by(user_id=user_id).first()
+    appt = Appointment.query.get(appt_id)
+    if not appt or appt.doctor_id != doctor.id:
+        return jsonify({'message': 'Appointment not found or not assigned'}), 404
+
+    appointments = Appointment.query.filter_by(patient_id=appt.patient_id).order_by(
+        Appointment.date.desc(), Appointment.time.desc()
+    ).all()
+
+    history_rows = []
+    for row in appointments:
+        treatments = Treatment.query.filter_by(appointment_id=row.id).all()
+        if not treatments:
+            history_rows.append({
+                'appointment_id': row.id,
+                'doctor_name': row.doctor.user.username,
+                'department': row.doctor.department.name,
+                'patient_name': row.patient.user.username,
+                'date': row.date.isoformat(),
+                'time': row.time.isoformat(),
+                'status': row.status,
+                'visit_type': 'In-person',
+                'tests_done': '-',
+                'diagnosis': '-',
+                'prescription': '-',
+                'medicines': '-',
+            })
+            continue
+
+        for treatment in treatments:
+            if treatment.medicines:
+                try:
+                    parsed_medicines = json.loads(treatment.medicines)
+                    if isinstance(parsed_medicines, list):
+                        formatted = []
+                        for med in parsed_medicines:
+                            if isinstance(med, dict):
+                                name = str(med.get('name', '')).strip()
+                                if not name:
+                                    continue
+                                dosage = f"{med.get('morning', '-') or '-'}-{med.get('afternoon', '-') or '-'}-{med.get('night', '-') or '-'}"
+                                formatted.append(f"{name} ({dosage})")
+                            else:
+                                text = str(med).strip()
+                                if text:
+                                    formatted.append(text)
+                        medicines_text = ', '.join(formatted) if formatted else '-'
+                    else:
+                        medicines_text = treatment.medicines
+                except Exception:
+                    medicines_text = treatment.medicines
+            else:
+                medicines_text = '-'
+
+            history_rows.append({
+                'appointment_id': row.id,
+                'doctor_name': row.doctor.user.username,
+                'department': row.doctor.department.name,
+                'patient_name': row.patient.user.username,
+                'date': row.date.isoformat(),
+                'time': row.time.isoformat(),
+                'status': row.status,
+                'visit_type': treatment.visit_type or 'In-person',
+                'tests_done': treatment.tests_done or '-',
+                'diagnosis': treatment.diagnosis or '-',
+                'prescription': treatment.prescription or '-',
+                'medicines': medicines_text,
+            })
+
+    return jsonify(history_rows), 200
 
 # Get doctor profile
 @doctor_bp.route('/profile', methods=['GET'])

@@ -1,21 +1,21 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timedelta, time
 import json
 from sqlalchemy.exc import IntegrityError
-from ..models import (
-	db,
-	User,
-	PatientProfile,
-	DoctorProfile,
-	Appointment,
-	DoctorAvailability,
-	Department,
-	Treatment,
-)
+from ..models import db, User, PatientProfile, DoctorProfile, Appointment, DoctorAvailability, Department, Treatment
+from celery import Celery
+from celery.result import AsyncResult
+import os
+
 
 
 patient_bp = Blueprint('patient', __name__)
+
+def _get_celery_client():
+	broker_url = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+	backend_url = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+	return Celery('hms_client', broker=broker_url, backend=backend_url)
 
 def _get_authorized_patient():
 	user_id = int(get_jwt_identity())
@@ -520,3 +520,72 @@ def update_patient_profile():
 
 	db.session.commit()
 	return jsonify({'message': 'Profile updated successfully'}), 200
+
+
+@patient_bp.route('/exports/history-csv', methods=['POST'])
+@jwt_required()
+def trigger_history_csv_export():
+	_, patient, error = _get_authorized_patient()
+	if error:
+		return error
+
+	celery_client = _get_celery_client()
+	task = celery_client.send_task('tasks.export_patient_history_csv', args=[patient.id])
+
+	return jsonify({
+		'message': 'CSV export started',
+		'task_id': task.id
+	}), 202
+
+
+@patient_bp.route('/exports/history-csv/<string:task_id>', methods=['GET'])
+@jwt_required()
+def get_history_csv_export_status(task_id):
+	_, patient, error = _get_authorized_patient()
+	if error:
+		return error
+
+	celery_client = _get_celery_client()
+	result = AsyncResult(task_id, app=celery_client)
+
+	response = {
+		'task_id': task_id,
+		'status': result.status,
+	}
+
+	if result.successful():
+		payload = result.result if isinstance(result.result, dict) else {}
+		if payload.get('patient_id') != patient.id:
+			return jsonify({'message': 'Access denied for this export task'}), 403
+
+		response['result'] = {
+			'message': payload.get('message'),
+		}
+	elif result.failed():
+		response['error'] = str(result.result)
+
+	return jsonify(response), 200
+
+@patient_bp.route('/exports/history-csv/<string:task_id>/download', methods=['GET'])
+@jwt_required()
+def download_history_csv_export(task_id):
+	_, patient, error = _get_authorized_patient()
+	if error:
+		return error
+
+	celery_client = _get_celery_client()
+	result = AsyncResult(task_id, app=celery_client)
+
+	if not result.successful():
+		return jsonify({'message': 'Export is not ready yet'}), 400
+
+	payload = result.result if isinstance(result.result, dict) else {}
+	if payload.get('patient_id') != patient.id:
+		return jsonify({'message': 'Access denied for this export task'}), 403
+
+	file_path = payload.get('file_path')
+	if not file_path or not os.path.exists(file_path):
+		return jsonify({'message': 'Export file not found'}), 404
+
+	return send_file(file_path, as_attachment=True, download_name='history.csv', mimetype='text/csv')
+

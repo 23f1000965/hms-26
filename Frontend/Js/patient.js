@@ -4,6 +4,7 @@ let patientSelectedSlot = null;
 let patientAllAppointments = [];
 let patientHistoryRows = [];
 let patientDoctorDirectoryCache = [];
+let patientExportPollTimer = null;
 
 async function loadPatientDashboard() {
 	try {
@@ -483,6 +484,10 @@ async function bookSelectedAppointment() {
 
 async function showPatientHistory() {
 	try {
+		if (patientExportPollTimer) {
+			clearInterval(patientExportPollTimer);
+			patientExportPollTimer = null;
+		}
 		const historyResponse = await axios.get('/api/patient/history');
 
 		patientHistoryRows = (historyResponse.data || [])
@@ -503,6 +508,9 @@ async function showPatientHistory() {
 
 		document.getElementById('patientContent').innerHTML = `
 			<h3>Patient History</h3>
+			<div class="d-flex align-items-center gap-2 mb-3">
+				<button class="btn btn-primary" id="patientExportCsvBtn" onclick="startPatientHistoryCsvExport()">Export CSV</button>
+			</div>
 			<div class="table-responsive">
 				<table class="table table-striped">
 					<thead>
@@ -524,6 +532,112 @@ async function showPatientHistory() {
 	} catch (error) {
 		alert(error.response?.data?.message || 'Failed to load patient history');
 	}
+}
+
+async function startPatientHistoryCsvExport() {
+	const button = document.getElementById('patientExportCsvBtn');
+	const statusText = document.getElementById('patientExportCsvStatus');
+
+	if (!button || !statusText) {
+		return;
+	}
+
+	button.disabled = true;
+	button.textContent = 'Exporting...';
+	statusText.textContent = 'Starting export job...';
+
+	try {
+		const response = await axios.post('/api/patient/exports/history-csv');
+		const taskId = response.data?.task_id;
+		if (!taskId) {
+			throw new Error('Task ID missing');
+		}
+
+		statusText.textContent = 'Export in progress...';
+		startPatientHistoryExportPolling(taskId);
+	} catch (error) {
+		button.disabled = false;
+		button.textContent = 'Export CSV';
+		statusText.textContent = 'Export failed to start';
+		alert(error.response?.data?.message || 'Failed to start CSV export');
+	}
+}
+
+function startPatientHistoryExportPolling(taskId) {
+	if (patientExportPollTimer) {
+		clearInterval(patientExportPollTimer);
+	}
+
+	patientExportPollTimer = setInterval(async () => {
+		const button = document.getElementById('patientExportCsvBtn');
+		const statusText = document.getElementById('patientExportCsvStatus');
+
+		if (!button || !statusText) {
+			clearInterval(patientExportPollTimer);
+			patientExportPollTimer = null;
+			return;
+		}
+
+		try {
+			const response = await axios.get(`/api/patient/exports/history-csv/${taskId}`);
+			const status = String(response.data?.status || '').toUpperCase();
+
+			if (status === 'SUCCESS') {
+				clearInterval(patientExportPollTimer);
+				patientExportPollTimer = null;
+
+				button.disabled = false;
+				button.textContent = 'Export CSV';
+				statusText.textContent = 'Export ready. Downloading...';
+
+				await downloadPatientHistoryCsv(taskId);
+				statusText.textContent = 'CSV downloaded successfully';
+				return;
+			}
+
+			if (status === 'FAILURE') {
+				clearInterval(patientExportPollTimer);
+				patientExportPollTimer = null;
+
+				button.disabled = false;
+				button.textContent = 'Export CSV';
+				statusText.textContent = 'Export failed';
+				alert(response.data?.error || 'CSV export failed');
+				return;
+			}
+
+			statusText.textContent = `Export status: ${status || 'PENDING'}`;
+		} catch (error) {
+			clearInterval(patientExportPollTimer);
+			patientExportPollTimer = null;
+
+			button.disabled = false;
+			button.textContent = 'Export CSV';
+			statusText.textContent = 'Export status check failed';
+		}
+	}, 2000);
+}
+
+async function downloadPatientHistoryCsv(taskId) {
+	const response = await axios.get(`/api/patient/exports/history-csv/${taskId}/download`, {
+		responseType: 'blob'
+	});
+
+	const disposition = response.headers['content-disposition'] || '';
+	const matchedFileName = disposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
+	const fileName = decodeURIComponent((matchedFileName && (matchedFileName[1] || matchedFileName[2])) || 'history.csv');
+
+	const blob = new Blob([response.data], { type: 'text/csv' });
+	const objectUrl = window.URL.createObjectURL(blob);
+
+	const link = document.createElement('a');
+	link.href = objectUrl;
+	link.download = fileName;
+	document.body.appendChild(link);
+	link.click();
+	link.remove();
+
+	window.URL.revokeObjectURL(objectUrl);
 }
 
 async function showMyAppointments(mode = 'BOOKED') {
