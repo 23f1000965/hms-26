@@ -1,0 +1,239 @@
+# Endpoints definition for Hospital Management System API
+endpoints:
+  /api/auth/register:
+    post:
+       Register user
+
+  /api/auth/login:
+    post:
+       Login user
+
+  /api/auth/profile:
+    get:
+       Get logged-in user profile
+
+  /api/admin/dashboard:
+    get:
+       Get admin dashboard stats
+
+  /api/admin/doctors:
+    get:
+       Get all doctors
+    post:
+       Add doctor
+
+  /api/admin/doctors/{doctor_id}:
+    parameters:
+      - in: path
+        name: doctor_id
+        required: true
+        schema:
+          type: integer
+    get:
+       Get doctor details
+    put:
+       Update doctor
+    delete:
+       Toggle doctor active status
+
+  /api/admin/patients:
+    get:
+       Get all patients
+
+  /api/admin/patients/{patient_id}:
+    parameters:
+      - in: path
+        name: patient_id
+        required: true
+        schema:
+          type: integer
+    delete:
+       Toggle patient active status
+
+  /api/admin/appointments:
+    get:
+       Get all appointments
+
+  /api/admin/appointments/{appt_id}:
+    parameters:
+      - in: path
+        name: appt_id
+        required: true
+        schema:
+          type: integer
+    put:
+       Update appointment status/notes
+
+  /api/admin/appointments/{appt_id}/detail:
+    parameters:
+      - in: path
+        name: appt_id
+        required: true
+        schema:
+          type: integer
+    get:
+       Get appointment detail with treatment
+
+  /api/admin/departments:
+    get:
+       Get all departments
+    post:
+       Create department
+
+  /api/admin/departments/{dept_id}:
+    parameters:
+      - in: path
+        name: dept_id
+        required: true
+        schema:
+          type: integer
+    put:
+       Update department
+    delete:
+       Delete department
+
+  /api/doctor/dashboard:
+    get:
+       Get doctor dashboard
+
+  /api/doctor/patients:
+    get:
+       Get doctor assigned patients
+
+  /api/doctor/appointments/{appt_id}:
+    parameters:
+      - in: path
+        name: appt_id
+        required: true
+        schema:
+          type: integer
+    put:
+       Update appointment and treatment
+
+  /api/doctor/appointments/{appt_id}/treatment:
+    parameters:
+      - in: path
+        name: appt_id
+        required: true
+        schema:
+          type: integer
+    get:
+       Get treatment for appointment
+
+  /api/doctor/appointments/{appt_id}/patient-history:
+    parameters:
+      - in: path
+        name: appt_id
+        required: true
+        schema:
+          type: integer
+    get:
+       Get patient history for appointment
+
+  /api/doctor/profile:
+    get:
+       Get doctor profile
+    put:
+       Update doctor profile
+
+  /api/doctor/notifications:
+    get:
+       Get doctor notifications
+
+  /api/doctor/availability:
+    get:
+       Get doctor availability
+    put:
+       Update doctor availability
+
+  /api/patient/dashboard:
+    get:
+       Get patient dashboard
+
+  /api/patient/departments:
+    get:
+       Get departments for patient
+
+  /api/patient/departments/{department_id}:
+    parameters:
+      - in: path
+        name: department_id
+        required: true
+        schema:
+          type: integer
+    get:
+       Get department details and doctors
+
+  /api/patient/doctors:
+    get:
+       Get doctors list for patient
+
+  /api/patient/doctors/{doctor_id}:
+    parameters:
+      - in: path
+        name: doctor_id
+        required: true
+        schema:
+          type: integer
+    get:
+       Get doctor details for patient
+
+  /api/patient/doctors/{doctor_id}/availability:
+    parameters:
+      - in: path
+        name: doctor_id
+        required: true
+        schema:
+          type: integer
+    get:
+       Get doctor public availability
+
+  /api/patient/appointments:
+    post:
+       Book appointment
+    get:
+       Get patient appointments
+
+  /api/patient/appointments/{appointment_id}/cancel:
+    parameters:
+      - in: path
+        name: appointment_id
+        required: true
+        schema:
+          type: integer
+    put:
+       Cancel appointment
+
+  /api/patient/history:
+    get:
+       Get patient treatment history
+
+  /api/patient/profile:
+    get:
+       Get patient profile
+    put:
+       Update patient profile
+
+  /api/patient/exports/history-csv:
+    post:
+       Trigger async history CSV export
+
+  /api/patient/exports/history-csv/{task_id}:
+    parameters:
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          type: string
+    get:
+       Get CSV export task status
+
+  /api/patient/exports/history-csv/{task_id}/download:
+    parameters:
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          type: string
+    get:
+       Download generated history CSV
