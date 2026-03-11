@@ -3,6 +3,8 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models import db, User, DoctorProfile, PatientProfile, Appointment, Department, DoctorAvailability, Treatment
 from datetime import datetime, timedelta, time
 import json
+from ..app import cache
+
 doctor_bp = Blueprint('doctor', __name__)
 
 def _get_authorized_doctor():
@@ -20,6 +22,7 @@ def _get_authorized_doctor():
 # Doctor dashboard with upcoming appointments
 @doctor_bp.route('/dashboard', methods=['GET'])
 @jwt_required()
+@cache.cached(timeout=60, key_prefix=lambda: f"doctor:dashboard:{get_jwt_identity()}")
 def get_doctor_dashboard():
     user_id = int(get_jwt_identity())
     user = User.query.get(user_id)

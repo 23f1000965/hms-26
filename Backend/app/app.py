@@ -1,10 +1,12 @@
 from flask import Flask, send_from_directory
 from flask_jwt_extended import JWTManager
+from flask_caching import Cache
 from .models import db
 import os
 from flask_cors import CORS
 
 jwt = JWTManager()
+cache = Cache()
 
 
 def create_app():
@@ -12,8 +14,9 @@ def create_app():
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///hospital.db'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['SECRET_KEY'] = 'hospital-management-system-secret-key-2026' 
-
-    
+    app.config['CACHE_TYPE'] = os.getenv('CACHE_TYPE', 'RedisCache')
+    app.config['CACHE_REDIS_URL'] = os.getenv('CACHE_REDIS_URL', 'redis://localhost:6379/1')
+    app.config['CACHE_DEFAULT_TIMEOUT'] = int(os.getenv('CACHE_DEFAULT_TIMEOUT', '60'))
 
     # Celery + Redis config
     app.config['CELERY_BROKER_URL'] = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
@@ -36,6 +39,7 @@ def create_app():
 
     db.init_app(app)
     jwt.init_app(app)
+    cache.init_app(app)
 
     CORS(app)  # Enable CORS for all routes
 

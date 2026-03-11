@@ -4,12 +4,13 @@ from ..models import db, User, DoctorProfile, PatientProfile, Appointment, Depar
 from werkzeug.security import generate_password_hash
 from sqlalchemy import func
 import json
-
+from ..app import cache
 admin_bp = Blueprint('admin', __name__)
 
 # admin can access all routes in this blueprint
 @admin_bp.route('/dashboard', methods=['GET'])
 @jwt_required()
+@cache.cached(timeout=60, key_prefix=lambda: f"admin:dashboard:{get_jwt_identity()}")
 def get_dashboard_stats():
     # JWT identity is stored as string, convert to int for DB lookup
     user_id = int(get_jwt_identity())

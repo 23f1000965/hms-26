@@ -7,7 +7,7 @@ from ..models import db, User, PatientProfile, DoctorProfile, Appointment, Docto
 from celery import Celery
 from celery.result import AsyncResult
 import os
-
+from ..app import cache
 
 
 patient_bp = Blueprint('patient', __name__)
@@ -44,6 +44,7 @@ def _format_slot_label(start_time, end_time):
 # Patient dashboard
 @patient_bp.route('/dashboard', methods=['GET'])
 @jwt_required()
+@cache.cached(timeout=60, key_prefix=lambda: f"patient:dashboard:{get_jwt_identity()}")
 def get_patient_dashboard():
 	_, patient, error = _get_authorized_patient()
 	if error:

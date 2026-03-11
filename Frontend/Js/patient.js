@@ -510,6 +510,7 @@ async function showPatientHistory() {
 			<h3>Patient History</h3>
 			<div class="d-flex align-items-center gap-2 mb-3">
 				<button class="btn btn-primary" id="patientExportCsvBtn" onclick="startPatientHistoryCsvExport()">Export CSV</button>
+				<span id="patientExportCsvStatus" class="text-muted small"></span>
 			</div>
 			<div class="table-responsive">
 				<table class="table table-striped">

@@ -1,4 +1,8 @@
 ## To Run the application follow these steps ##
+## create virtual environment
+"python -m venv .venv"
+".venv/scripts/activate"
+
 1) "pip install -r requirements.txt"
 
 2) "cd Backend",
@@ -7,6 +11,9 @@
 3) ## To start Redis ##
 * "sudo apt update"
 * "sudo apt install redis-server -y"
+To check running or not :-
+redis-cli ping
+
 
 4) ## To start Mailhog
 * "cd ~"
@@ -14,6 +21,9 @@
 * "chmod +x MailHog_linux_amd64"
 * "sudo mv MailHog_linux_amd64 /usr/local/bin/mailhog"
 * "mailhog"
+
+To see where running:-
+Web UI: `http://localhost:8025`
 
 5) ## To start celery worker
 cd backend
